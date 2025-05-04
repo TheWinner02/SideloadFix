@@ -1,0 +1,9 @@
+Package: moe.waru.sideloadfix
+Name: SideloadFix
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Fix crashing when sideloading apps
+Maintainer: waruhachi
+Author: waruhachi
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000), firmware(>=14.0)

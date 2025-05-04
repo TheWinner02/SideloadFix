@@ -1,0 +1,98 @@
+name: Build and Release Tweak
+
+permissions:
+    contents: write
+
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    cleanup:
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Cleaning up existing releases and tags
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                gh release delete release --yes || true
+                git push origin :refs/tags/release || true
+
+    build:
+        needs: cleanup
+        runs-on: macos-latest
+        strategy:
+            matrix:
+                scheme: [rootful]
+                include:
+                  - scheme: rootful
+                    scheme_arg: ""
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                submodules: 'recursive'
+
+            - name: Set up Theos
+              uses: waruhachi/theos-action@v2.4.6
+              with:
+                theos-src: 'waruhachi/theos'
+                theos-branch: 'main'
+                sdks-src: 'waruhachi/sdks'
+                sdks-branch: 'main'
+
+            - name: Build Package
+              shell: bash
+              run: |
+                make clean package FINALPACKAGE=1 ${{ matrix.scheme_arg }}
+
+            - name: Upload DEB
+              uses: actions/upload-artifact@v4
+              with:
+                name: ${{ matrix.scheme }}-package
+                path: .theos/obj/*.dylib
+
+    release:
+        needs: build
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Download all DEBs
+              uses: actions/download-artifact@v4
+              with:
+                path: all-packages
+
+            - name: Prepare DEBs
+              run: |
+                mkdir -p packages
+                cp all-packages/*-package/*.dylib packages/
+
+            - name: Generate Checksums
+              id: metadata
+              shell: bash
+              run: |
+                for pkg in packages/*.dylib; do
+                  if [ -f "$pkg" ]; then
+                    echo "### Dylib" >> release_body.md
+                    echo "* MD5: $(md5 -q $pkg)" >> release_body.md
+                    echo "* SHA1: $(shasum -a 1 $pkg | awk '{ print $1 }')" >> release_body.md
+                    echo "* SHA256: $(shasum -a 256 $pkg | awk '{ print $1 }')" >> release_body.md
+                    echo "" >> release_body.md
+                  fi
+                done
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                tag_name: release
+                name: ${{ github.event.repository.name }}
+                body_path: release_body.md
+                files: packages/*.dylib
+                draft: false
+                prerelease: false
+                make_latest: true
