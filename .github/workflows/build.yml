@@ -46,12 +46,12 @@ jobs:
             - name: Build Package
               shell: bash
               run: |
-                make clean package FINALPACKAGE=1 ${{ matrix.scheme_arg }}
+                make clean package FINALPACKAGE=1 STRIP=0 LOGOS_DEFAULT_GENERATOR=internal ${{ matrix.scheme_arg }}
 
-            - name: Upload DEB
+            - name: Upload Dylib
               uses: actions/upload-artifact@v4
               with:
-                name: ${{ matrix.scheme }}-package
+                name: packages
                 path: .theos/obj/*.dylib
 
     release:
@@ -63,12 +63,8 @@ jobs:
             - name: Download all DEBs
               uses: actions/download-artifact@v4
               with:
-                path: all-packages
-
-            - name: Prepare DEBs
-              run: |
-                mkdir -p packages
-                cp all-packages/*-package/*.dylib packages/
+                name: packages
+                path: packages
 
             - name: Generate Checksums
               id: metadata
@@ -96,3 +92,12 @@ jobs:
                 draft: false
                 prerelease: false
                 make_latest: true
+
+            - name: Delete build artifacts
+              uses: geekyeggo/delete-artifact@v5
+              with:
+                name: |
+                  rootful-package
+                  rootless-package
+                  roothide-package
+                failOnError: false
